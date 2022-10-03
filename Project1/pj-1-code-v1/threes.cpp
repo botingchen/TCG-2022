@@ -63,7 +63,7 @@ int main(int argc, const char* argv[]) {
 
 	//random_slider slide(slide_args);
 	random_placer place(place_args);
-	two_step_greedy_player slide(slide_args);
+	greedy_slider slide(slide_args);
 
 	while (!stats.is_finished()) {
 //		std::cerr << "======== Game " << stats.step() << " ========" << std::endl;

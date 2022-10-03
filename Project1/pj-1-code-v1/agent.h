@@ -175,9 +175,9 @@ public:
 private:
 	std::array<int, 4> opcode;
 };
-class two_step_greedy_player : public agent {
+class greedy_slider : public agent {
 public:
-	two_step_greedy_player(const std::string& args = "") : agent(args), opcode({ 0, 1, 2, 3 }) {}
+	greedy_slider(const std::string& args = "") : agent(args), opcode({ 0, 1, 2, 3 }) {}
 
 	virtual action take_action(const board& before) {
 		int op_final = -1;
