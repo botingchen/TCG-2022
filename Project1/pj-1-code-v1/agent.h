@@ -186,18 +186,18 @@ public:
 		for (int op : opcode) {
 			auto tmp1 = board(before);
 			board::reward reward_first_step = tmp1.slide(op);
-			board::reward reward_second_step_max = -1;
 
-			for (int op : opcode) {
+
+			for (int op2 : opcode) {
 				auto tmp2 = board(tmp1);
-				board::reward reward_second_step = tmp2.slide(op);
-				if (reward_second_step > reward_second_step_max) reward_second_step_max = reward_second_step;
-			}
+				board::reward reward_second_step = tmp2.slide(op2);
+				if(reward_first_step + reward_second_step >= reward_max ){
+					op_final = op;
+					reward_max = reward_first_step + reward_second_step;
+				}	
 
-			if(reward_first_step + reward_second_step_max >= reward_max ){
-				op_final = op;
-				reward_max = reward_first_step + reward_second_step_max;
 			}
+		
 		}
 		if (reward_max != -1) return  action::slide(op_final);
 		return action();
