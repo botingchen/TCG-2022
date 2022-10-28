@@ -1,0 +1,4 @@
+*.bin
+stats.txt
+*.tar.gz
+*.log

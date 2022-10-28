@@ -63,7 +63,9 @@ int main(int argc, const char* argv[]) {
 
 	//random_slider slide(slide_args);
 	random_placer place(place_args);
-	greedy_slider slide(slide_args);
+	// greedy_slider slide(slide_args);
+	learning_slider slide(slide_args);
+	std::vector<state> path;
 
 	while (!stats.is_finished()) {
 //		std::cerr << "======== Game " << stats.step() << " ========" << std::endl;
@@ -73,15 +75,30 @@ int main(int argc, const char* argv[]) {
 		stats.open_episode(slide.name() + ":" + place.name());
 		episode& game = stats.back();
 		while (true) {
+			state s;
+			s.board_before = game.state();
 			agent& who = game.take_turns(slide, place);
-			action move = who.take_action(game.state());
+			float state_value = 0.0;
+			int reward = 0;
+			action move = who.take_action(game.state(), state_value, reward);
 //			std::cerr << game.state() << "#" << game.step() << " " << who.name() << ": " << move << std::endl;
 			if (game.apply_action(move) != true) break;
+			s.board_after = game.state();
+			s.reward = reward;
+			s.value = state_value;
+
+			// player's move
+			if (reward != 0 || state_value != 0) {
+				path.push_back(s);
+			}
+
 			if (who.check_for_win(game.state())) break;
 		}
 		agent& win = game.last_turns(slide, place);
 		stats.close_episode(win.name());
 
+		slide.update(path);
+    	path.clear();
 		slide.close_episode(win.name());
 		place.close_episode(win.name());
 	}
@@ -91,6 +108,5 @@ int main(int argc, const char* argv[]) {
 		out << stats;
 		out.close();
 	}
-
 	return 0;
 }

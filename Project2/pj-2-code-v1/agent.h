@@ -18,6 +18,16 @@
 #include "board.h"
 #include "action.h"
 #include "weight.h"
+struct state {
+	board board_before;
+	board board_after;
+	int reward;
+	float value;
+	state(){
+		reward = 0;
+		value = 0;
+	}
+};
 
 class agent {
 public:
@@ -32,7 +42,7 @@ public:
 	virtual ~agent() {}
 	virtual void open_episode(const std::string& flag = "") {}
 	virtual void close_episode(const std::string& flag = "") {}
-	virtual action take_action(const board& b) { return action(); }
+	virtual action take_action(const board& b, float& state_value, int& r) { return action(); }
 	virtual bool check_for_win(const board& b) { return false; }
 
 public:
@@ -87,11 +97,15 @@ public:
 
 protected:
 	virtual void init_weights(const std::string& info) {
-		std::string res = info; // comma-separated sizes, e.g., "65536,65536"
-		for (char& ch : res)
-			if (!std::isdigit(ch)) ch = ' ';
-		std::stringstream in(res);
-		for (size_t size; in >> size; net.emplace_back(size));
+		// std::string res = info; // comma-separated sizes, e.g., "65536,65536"
+		// for (char& ch : res)
+		// 	if (!std::isdigit(ch)) ch = ' ';
+		// std::stringstream in(res);
+		// for (size_t size; in >> size; net.emplace_back(size));
+		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
+		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
+		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
+		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
 	}
 	virtual void load_weights(const std::string& path) {
 		std::ifstream in(path, std::ios::in | std::ios::binary);
@@ -130,7 +144,7 @@ public:
 		spaces[4] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 	}
 
-	virtual action take_action(const board& after) {
+	virtual action take_action(const board& after, float& state_value, int& r) {
 		std::vector<int> space = spaces[after.last()];
 		std::shuffle(space.begin(), space.end(), engine);
 		for (int pos : space) {
@@ -175,35 +189,142 @@ public:
 private:
 	std::array<int, 4> opcode;
 };
-class greedy_slider : public agent {
+class learning_slider : public weight_agent {
 public:
-	greedy_slider(const std::string& args = "") : agent(args), opcode({ 0, 1, 2, 3 }) {}
+	learning_slider(const std::string& args = "") : weight_agent(args), opcode({ 0, 1, 2, 3 }), space({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }) {}
 
-	virtual action take_action(const board& before) {
-		int op_final = -1;
-		board::reward reward_max = -1;
-
+	virtual action take_action(const board& before, float& state_value, int& r) {
+		float best_v = -999999;
+		int best_reward = -999999;
+		float best_state_value = -999999;
+		int best_op = -1;
 		for (int op : opcode) {
-			auto tmp1 = board(before);
-			board::reward reward_first_step = tmp1.slide(op);
-
-
-			for (int op2 : opcode) {
-				auto tmp2 = board(tmp1);
-				board::reward reward_second_step = tmp2.slide(op2);
-				if(reward_first_step + reward_second_step >= reward_max ){
-					op_final = op;
-					reward_max = reward_first_step + reward_second_step;
-				}	
-
+			board tmp = board(before);
+			board::reward reward = tmp.slide(op);
+			if (reward == -1) {
+				continue;
 			}
-		
+
+			float vs = estimate_value(tmp);
+			float v = reward + vs;
+			if (v > best_v) {
+				best_v = v;
+				best_op = op;
+				best_reward = reward;
+				best_state_value = vs;
+			}
+
 		}
-		if (reward_max != -1) return  action::slide(op_final);
-		return action();
+		if (best_op == -1) {
+			return action();
+		} else {
+			state_value = best_state_value;
+			r = best_reward;
+			return action::slide(best_op);
+		}
+		
+	}
+	float estimate_value(const board& b) {
+		float sum = 0.0;
+		board tmp = board(b);
+		
+		for (int i = 0; i < 4; ++i) {
+			/*
+			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
+			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
+			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
+			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
+			*/
+			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
+			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
+			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
+			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			sum += (net[0][idx0] + net[1][idx1] + net[2][idx2] + net[3][idx3]);
+			tmp.rotate_clockwise();
+		}
+
+		tmp.reflect_horizontal();
+
+		for (int i = 0; i < 4; ++i) {
+			/*
+			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
+			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
+			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
+			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
+			*/
+			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
+			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
+			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
+			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			sum += (net[0][idx0] + net[1][idx1] + net[2][idx2] + net[3][idx3]);
+			tmp.rotate_clockwise();
+		}
+		
+		return sum;
+
 	}
 
+	void adjust_value(const board& b, float target) {
+		board tmp = board(b);
+		float t_split = target / 32;
+
+		for (int i = 0; i < 4; ++i) {
+			/*
+			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
+			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
+			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
+			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
+			*/
+			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
+			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
+			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
+			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			net[0][idx0] += t_split;
+			net[1][idx1] += t_split;
+			net[2][idx2] += t_split;
+			net[3][idx3] += t_split;
+			tmp.rotate_clockwise();
+		}
+
+		tmp.reflect_horizontal();
+		
+		for (int i = 0; i < 4; ++i) {
+			/*
+			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
+			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
+			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
+			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
+			*/
+			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
+			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
+			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
+			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			net[0][idx0] += t_split;
+			net[1][idx1] += t_split;
+			net[2][idx2] += t_split;
+			net[3][idx3] += t_split;
+			tmp.rotate_clockwise();
+		}
+	}
+
+	int extract_feature(const board& after, int a, int b, int c, int d) const {
+		return after(a) * 16 * 16 * 16 + after(b) * 16 * 16 + after(c) * 16 + after(d);
+	}
+
+	int extract_feature6(const board& after, int a, int b, int c, int d, int e, int f) const {
+		return after(a) * 16 * 16 * 16 * 16 * 16 + after(b) * 16 * 16 * 16 * 16 + after(c) * 16 * 16 * 16 + after(d) * 16 * 16 + after(e) * 16 + after(f);
+	}
+
+	void update(std::vector<state>& path) {
+		float tmp = 0;
+		for (int i = path.size() - 1; i >= 0; i--) {
+			float td_error = tmp - path[i].value;
+			adjust_value(path[i].board_after, alpha * td_error);
+			tmp = path[i].reward + estimate_value(path[i].board_after);
+		}
+	}
 private:
 	std::array<int, 4> opcode;
+	std::vector<int> space;
 };
 
