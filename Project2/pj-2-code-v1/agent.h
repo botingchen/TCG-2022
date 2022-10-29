@@ -102,10 +102,11 @@ protected:
 		// 	if (!std::isdigit(ch)) ch = ' ';
 		// std::stringstream in(res);
 		// for (size_t size; in >> size; net.emplace_back(size));
-		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
-		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
-		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
-		net.emplace_back(16 * 16 * 16 * 16 * 16 * 16);
+		int table_size = 16 * 16 * 16 * 16 * 16 * 16
+		net.emplace_back(table_size);
+		net.emplace_back(table_size);
+		net.emplace_back(table_size);
+		net.emplace_back(table_size);
 	}
 	virtual void load_weights(const std::string& path) {
 		std::ifstream in(path, std::ios::in | std::ios::binary);
@@ -194,51 +195,48 @@ public:
 	learning_slider(const std::string& args = "") : weight_agent(args), opcode({ 0, 1, 2, 3 }), space({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }) {}
 
 	virtual action take_action(const board& before, float& state_value, int& r) {
-		float best_v = -999999;
+		float best_total = -999999;
 		int best_reward = -999999;
 		float best_state_value = -999999;
 		int best_op = -1;
-		for (int op : opcode) {
+		for(int op : opcode){
 			board tmp = board(before);
 			board::reward reward = tmp.slide(op);
 			if (reward == -1) {
 				continue;
 			}
 
-			float vs = estimate_value(tmp);
-			float v = reward + vs;
-			if (v > best_v) {
-				best_v = v;
+			float q_value = estimate_value(tmp);
+			float v = reward + q_value;
+			if (v > best_total) {
+				best_total = v;
 				best_op = op;
 				best_reward = reward;
-				best_state_value = vs;
+				best_state_value = q_value;
 			}
 
 		}
-		if (best_op == -1) {
+		if(best_op == -1){
 			return action();
-		} else {
+		}
+		else{
 			state_value = best_state_value;
 			r = best_reward;
 			return action::slide(best_op);
 		}
 		
 	}
-	float estimate_value(const board& b) {
+
+	//function for estimate Q value
+	float estimate_value(const board& bd) {
 		float sum = 0.0;
-		board tmp = board(b);
+		board tmp = board(bd);
 		
 		for (int i = 0; i < 4; ++i) {
-			/*
-			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
-			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
-			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
-			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
-			*/
-			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
-			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
-			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
-			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			int idx0 = hash_function1(tmp);
+			int idx1 = hash_function2(tmp);
+			int idx2 = hash_function3(tmp);
+			int idx3 = hash_function4(tmp);
 			sum += (net[0][idx0] + net[1][idx1] + net[2][idx2] + net[3][idx3]);
 			tmp.rotate_clockwise();
 		}
@@ -246,16 +244,10 @@ public:
 		tmp.reflect_horizontal();
 
 		for (int i = 0; i < 4; ++i) {
-			/*
-			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
-			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
-			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
-			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
-			*/
-			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
-			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
-			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
-			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			int idx0 = hash_function1(tmp);
+			int idx1 = hash_function2(tmp);
+			int idx2 = hash_function3(tmp);
+			int idx3 = hash_function4(tmp);
 			sum += (net[0][idx0] + net[1][idx1] + net[2][idx2] + net[3][idx3]);
 			tmp.rotate_clockwise();
 		}
@@ -264,21 +256,16 @@ public:
 
 	}
 
+	//function for modify value of weight table
 	void adjust_value(const board& b, float target) {
 		board tmp = board(b);
 		float t_split = target / 32;
 
 		for (int i = 0; i < 4; ++i) {
-			/*
-			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
-			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
-			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
-			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
-			*/
-			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
-			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
-			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
-			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			int idx0 = hash_function1(tmp);
+			int idx1 = hash_function2(tmp);
+			int idx2 = hash_function3(tmp);
+			int idx3 = hash_function4(tmp);
 			net[0][idx0] += t_split;
 			net[1][idx1] += t_split;
 			net[2][idx2] += t_split;
@@ -289,16 +276,10 @@ public:
 		tmp.reflect_horizontal();
 		
 		for (int i = 0; i < 4; ++i) {
-			/*
-			int idx0 = extract_feature(tmp, 0, 1, 2, 3);
-			int idx1 = extract_feature(tmp, 4, 5, 6, 7);
-			int idx2 = extract_feature(tmp, 8, 9, 10, 11);
-			int idx3 = extract_feature(tmp, 12, 13, 14, 15);
-			*/
-			int idx0 = extract_feature6(tmp, 0, 1, 2, 3, 4, 5);
-			int idx1 = extract_feature6(tmp, 4, 5, 6, 7, 8, 9);
-			int idx2 = extract_feature6(tmp, 5, 6, 7, 9, 10, 11);
-			int idx3 = extract_feature6(tmp, 9, 10, 11, 13, 14, 15);
+			int idx0 = hash_function1(tmp);
+			int idx1 = hash_function2(tmp);
+			int idx2 = hash_function3(tmp);
+			int idx3 = hash_function4(tmp);
 			net[0][idx0] += t_split;
 			net[1][idx1] += t_split;
 			net[2][idx2] += t_split;
@@ -307,13 +288,20 @@ public:
 		}
 	}
 
-	int extract_feature(const board& after, int a, int b, int c, int d) const {
-		return after(a) * 16 * 16 * 16 + after(b) * 16 * 16 + after(c) * 16 + after(d);
+	//function for extract index(hash table)
+	int hash_function1(const board& after) const {
+		return after(0) * 16 * 16 * 16 * 16 * 16 + after(1) * 16 * 16 * 16 * 16 + after(2) * 16 * 16 * 16 + after(3) * 16 * 16 + after(4) * 16 + after(5);
+	}
+	int hash_function2(const board& after) const {
+		return after(4) * 16 * 16 * 16 * 16 * 16 + after(5) * 16 * 16 * 16 * 16 + after(6) * 16 * 16 * 16 + after(7) * 16 * 16 + after(8) * 16 + after(9);
+	}
+	int hash_function3(const board& after) const {
+		return after(5) * 16 * 16 * 16 * 16 * 16 + after(6) * 16 * 16 * 16 * 16 + after(7) * 16 * 16 * 16 + after(9) * 16 * 16 + after(10) * 16 + after(11);
+	}
+	int hash_function4(const board& after) const {
+		return after(9) * 16 * 16 * 16 * 16 * 16 + after(10) * 16 * 16 * 16 * 16 + after(11) * 16 * 16 * 16 + after(13) * 16 * 16 + after(14) * 16 + after(15);
 	}
 
-	int extract_feature6(const board& after, int a, int b, int c, int d, int e, int f) const {
-		return after(a) * 16 * 16 * 16 * 16 * 16 + after(b) * 16 * 16 * 16 * 16 + after(c) * 16 * 16 * 16 + after(d) * 16 * 16 + after(e) * 16 + after(f);
-	}
 
 	void update(std::vector<state>& path) {
 		float tmp = 0;
