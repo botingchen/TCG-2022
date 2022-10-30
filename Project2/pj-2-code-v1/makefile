@@ -8,7 +8,6 @@ train:
 	do \
 		./threes --total=100000 --block=1000 --limit=1000 --slide="load=weights.bin save=weights.bin alpha=0.1" | tee -a train.log; \
 		./threes --total=1000 --slide="load=weights.bin alpha=0" --save="stats.txt"; \
-		tar zcvf weights.$i.tar.gz weights.bin train.log stats.txt; \
 	done
 stats:
 	./threes --total=1000 --save=stats.txt --play="load=weights.bin"

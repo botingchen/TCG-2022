@@ -109,6 +109,10 @@ protected:
 		net.emplace_back(table_size);
 		net.emplace_back(table_size);
 		net.emplace_back(table_size);
+		// net.emplace_back(table_size);
+		// net.emplace_back(table_size);
+		// net.emplace_back(table_size);
+		// net.emplace_back(table_size);
 	}
 	virtual void load_weights(const std::string& path) {
 		std::ifstream in(path, std::ios::in | std::ios::binary);
@@ -239,6 +243,14 @@ public:
 			int idx1 = hash_function2(tmp);
 			int idx2 = hash_function3(tmp);
 			int idx3 = hash_function4(tmp);
+			// int idx0 = hash_function(tmp,0,1,2,4,5,6);
+			// int idx1 = hash_function(tmp,1,2,5,6,9,13);
+			// int idx2 = hash_function(tmp,0,1,2,3,4,5);
+			// int idx3 = hash_function(tmp,0,1,5,6,7,10);
+			// int idx4 = hash_function(tmp,0,1,2,5,9,10);
+			// int idx5 = hash_function(tmp,0,1,5,9,13,14);
+			// int idx6 = hash_function(tmp,0,1,5,8,9,13);
+			// int idx7 = hash_function(tmp,0,1,2,4,6,10);
 			sum += (net[0][idx0] + net[1][idx1] + net[2][idx2] + net[3][idx3]);
 			tmp.rotate_clockwise();
 		}
@@ -250,6 +262,14 @@ public:
 			int idx1 = hash_function2(tmp);
 			int idx2 = hash_function3(tmp);
 			int idx3 = hash_function4(tmp);
+			// int idx0 = hash_function(tmp,0,1,2,4,5,6);
+			// int idx1 = hash_function(tmp,1,2,5,6,9,13);
+			// int idx2 = hash_function(tmp,0,1,2,3,4,5);
+			// int idx3 = hash_function(tmp,0,1,5,6,7,10);
+			// int idx4 = hash_function(tmp,0,1,2,5,9,10);
+			// int idx5 = hash_function(tmp,0,1,5,9,13,14);
+			// int idx6 = hash_function(tmp,0,1,5,8,9,13);
+			// int idx7 = hash_function(tmp,0,1,2,4,6,10);
 			sum += (net[0][idx0] + net[1][idx1] + net[2][idx2] + net[3][idx3]);
 			tmp.rotate_clockwise();
 		}
@@ -267,10 +287,22 @@ public:
 			int idx1 = hash_function2(tmp);
 			int idx2 = hash_function3(tmp);
 			int idx3 = hash_function4(tmp);
+			// int idx0 = hash_function(tmp,0,1,2,4,5,6);
+			// int idx1 = hash_function(tmp,1,2,5,6,9,13);
+			// int idx2 = hash_function(tmp,0,1,2,3,4,5);
+			// int idx3 = hash_function(tmp,0,1,5,6,7,10);
+			// int idx4 = hash_function(tmp,0,1,2,5,9,10);
+			// int idx5 = hash_function(tmp,0,1,5,9,13,14);
+			// int idx6 = hash_function(tmp,0,1,5,8,9,13);
+			// int idx7 = hash_function(tmp,0,1,2,4,6,10);
 			net[0][idx0] += final_tderror;
 			net[1][idx1] += final_tderror;
 			net[2][idx2] += final_tderror;
 			net[3][idx3] += final_tderror;
+			// net[4][idx4] += final_tderror;
+			// net[5][idx5] += final_tderror;
+			// net[6][idx6] += final_tderror;
+			// net[7][idx7] += final_tderror;
 			tmp.rotate_clockwise();
 		}
 
@@ -281,10 +313,22 @@ public:
 			int idx1 = hash_function2(tmp);
 			int idx2 = hash_function3(tmp);
 			int idx3 = hash_function4(tmp);
+			// int idx0 = hash_function(tmp,0,1,2,4,5,6);
+			// int idx1 = hash_function(tmp,1,2,5,6,9,13);
+			// int idx2 = hash_function(tmp,0,1,2,3,4,5);
+			// int idx3 = hash_function(tmp,0,1,5,6,7,10);
+			// int idx4 = hash_function(tmp,0,1,2,5,9,10);
+			// int idx5 = hash_function(tmp,0,1,5,9,13,14);
+			// int idx6 = hash_function(tmp,0,1,5,8,9,13);
+			// int idx7 = hash_function(tmp,0,1,2,4,6,10);
 			net[0][idx0] += final_tderror;
 			net[1][idx1] += final_tderror;
 			net[2][idx2] += final_tderror;
 			net[3][idx3] += final_tderror;
+			// net[4][idx4] += final_tderror;
+			// net[5][idx5] += final_tderror;
+			// net[6][idx6] += final_tderror;
+			// net[7][idx7] += final_tderror;
 			tmp.rotate_clockwise();
 		}
 	}
@@ -302,6 +346,9 @@ public:
 	int hash_function4(const board& after) const {
 		return after(9) * 16 * 16 * 16 * 16 * 16 + after(10) * 16 * 16 * 16 * 16 + after(11) * 16 * 16 * 16 + after(13) * 16 * 16 + after(14) * 16 + after(15);
 	}
+	// int hash_function(const board& after, int a, int b, int c, int d, int e, int f) const {
+	// 	return after(a) * 16 * 16 * 16 * 16 * 16 + after(b) * 16 * 16 * 16 * 16 + after(c) * 16 * 16 * 16 + after(d) * 16 * 16 + after(e) * 16 + after(f);
+	// }
 
 
 	void update(std::vector<state>& path) {
