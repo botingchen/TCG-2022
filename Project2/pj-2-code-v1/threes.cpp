@@ -85,9 +85,8 @@ int main(int argc, const char* argv[]) {
 			if (game.apply_action(move) != true) break;
 			s1.board_after = game.state();
 			s1.reward = reward;
-			s1.value = state_value;
+			s1.value = state_value;		//store afterstate value to calculate td error
 
-			// player's move
 			if (reward != 0 || state_value != 0) {
 				path.push_back(s1);
 			}

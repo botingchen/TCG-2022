@@ -102,7 +102,9 @@ protected:
 		// 	if (!std::isdigit(ch)) ch = ' ';
 		// std::stringstream in(res);
 		// for (size_t size; in >> size; net.emplace_back(size));
-		int table_size = 16 * 16 * 16 * 16 * 16 * 16
+
+		//use 16 since it's hard to get 16th value(98304)
+		int table_size = 16 * 16 * 16 * 16 * 16 * 16;
 		net.emplace_back(table_size);
 		net.emplace_back(table_size);
 		net.emplace_back(table_size);
@@ -206,8 +208,8 @@ public:
 				continue;
 			}
 
-			float q_value = estimate_value(tmp);
-			float v = reward + q_value;
+			float q_value = estimate_value(tmp);	//evaluate the afterstate values by the n-tuple network
+			float v = reward + q_value;				//sum up immediate rewards and afterstate values
 			if (v > best_total) {
 				best_total = v;
 				best_op = op;
@@ -227,7 +229,7 @@ public:
 		
 	}
 
-	//function for estimate Q value
+	//function for estimate afterstate value
 	float estimate_value(const board& bd) {
 		float sum = 0.0;
 		board tmp = board(bd);
@@ -256,20 +258,19 @@ public:
 
 	}
 
-	//function for modify value of weight table
-	void adjust_value(const board& b, float target) {
+	//function for modify feature weight
+	void adjust_value(const board& b, float final_tderror) {
 		board tmp = board(b);
-		float t_split = target / 32;
 
 		for (int i = 0; i < 4; ++i) {
 			int idx0 = hash_function1(tmp);
 			int idx1 = hash_function2(tmp);
 			int idx2 = hash_function3(tmp);
 			int idx3 = hash_function4(tmp);
-			net[0][idx0] += t_split;
-			net[1][idx1] += t_split;
-			net[2][idx2] += t_split;
-			net[3][idx3] += t_split;
+			net[0][idx0] += final_tderror;
+			net[1][idx1] += final_tderror;
+			net[2][idx2] += final_tderror;
+			net[3][idx3] += final_tderror;
 			tmp.rotate_clockwise();
 		}
 
@@ -280,15 +281,15 @@ public:
 			int idx1 = hash_function2(tmp);
 			int idx2 = hash_function3(tmp);
 			int idx3 = hash_function4(tmp);
-			net[0][idx0] += t_split;
-			net[1][idx1] += t_split;
-			net[2][idx2] += t_split;
-			net[3][idx3] += t_split;
+			net[0][idx0] += final_tderror;
+			net[1][idx1] += final_tderror;
+			net[2][idx2] += final_tderror;
+			net[3][idx3] += final_tderror;
 			tmp.rotate_clockwise();
 		}
 	}
 
-	//function for extract index(hash table)
+	//function for feature extraction and index encoding. Using 16 since it's hard to get the 16th value(98304)
 	int hash_function1(const board& after) const {
 		return after(0) * 16 * 16 * 16 * 16 * 16 + after(1) * 16 * 16 * 16 * 16 + after(2) * 16 * 16 * 16 + after(3) * 16 * 16 + after(4) * 16 + after(5);
 	}
@@ -304,10 +305,11 @@ public:
 
 
 	void update(std::vector<state>& path) {
-		float tmp = 0;
+		float tmp = 0;	//zero for the final afterstate
 		for (int i = path.size() - 1; i >= 0; i--) {
 			float td_error = tmp - path[i].value;
-			adjust_value(path[i].board_after, alpha * td_error);
+			float alpha_final = alpha / 32;
+			adjust_value(path[i].board_after, alpha_final * td_error);
 			tmp = path[i].reward + estimate_value(path[i].board_after);
 		}
 	}
