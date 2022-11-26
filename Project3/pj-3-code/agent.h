@@ -110,6 +110,7 @@ public:
 	}
 
 	void computeUCB(node* cur, int parent_visit_count) {						//count for UCT 
+		if(cur->visit_count == 0) return;
 		double win_rate = (double) cur->win_count / (double) cur->visit_count;
 		const float c = 0.5;
 		double exploitation = sqrt(log((double)parent_visit_count)/cur->visit_count);
