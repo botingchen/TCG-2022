@@ -279,8 +279,8 @@ public:
 		
 
 		else if (agent_name == "MCTS"){
-			// clock_t start_time, end_time, total_time = 0;
-			// start_time = clock();
+			clock_t start_time, end_time, total_time = 0;
+			start_time = clock();
 			
 			node* root = new node;
 			board::piece_type winner;
@@ -291,8 +291,22 @@ public:
 
 			//std::cout << root->who << " is playing " << std::endl;
 			
-			
-			MCTS(root,winner,simulation_count);
+			if(simulation_count){
+				MCTS(root,winner,simulation_count);				
+			}
+			else{
+				while(total_time < timeout) {
+				
+					node* best_node = selection(root);
+					expand(best_node);
+					winner = simulation(best_node);
+				
+					backpropagation(root, best_node, winner);
+					end_time = clock();
+					total_time = (double)(end_time-start_time);
+				}
+			}
+
 			
 
 			action best_action = choose_Action(root);
