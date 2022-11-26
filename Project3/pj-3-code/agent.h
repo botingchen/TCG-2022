@@ -77,6 +77,7 @@ public:
         int win_count = 0;
         int visit_count = 0;
         double UCB_value = 0x7fffffff;
+		double UCB_RAVE_value = 0x7fffffff;
         node* parent = NULL;
         action::place last_action;
         std::vector<node*> children;
@@ -84,7 +85,10 @@ public:
 
 	~node(){};
 };
-
+struct v{
+	int total = 0;
+	int win = 0;
+};
 class MCTS_player : public random_agent {
 public:
 	MCTS_player(const std::string& args = "") : random_agent("name=random role=unknown " + args),
@@ -110,11 +114,34 @@ public:
 	}
 
 	void computeUCB(node* cur, int parent_visit_count) {						//count for UCT 
-		if(cur->visit_count == 0) return;
+		// if(cur->visit_count == 0) return;
 		double win_rate = (double) cur->win_count / (double) cur->visit_count;
 		const float c = 0.5;
 		double exploitation = sqrt(log((double)parent_visit_count)/cur->visit_count);
 		cur->UCB_value = win_rate + c * exploitation;;
+	}
+	void computeUCB_RAVE(node* cur, node* root, int parent_visit_count){
+		// if(action2v[cur->last_action].total == 0) return;
+		// double win_rate = (double) action2v[cur->last_action].win / (double) action2v[cur->last_action].total;
+		// double exploitation = -1;
+		// double result = (action2v[cur->last_action].win + cur->win_count + std::sqrt(log((double)parent_visit_count) * cur->visit_count) * 0.25f) / (action2v[cur->last_action].total + cur->visit_count);
+		// beta = self.equivalence/(3 * total + self.equivalence);
+		// if(cur->parent == root) exploitation = sqrt(log((double)parent_visit_count) / (double) action2v[cur->last_action].total);
+		// else exploitation = sqrt(log((double)action2v[cur->parent->last_action].total) / (double) action2v[cur->last_action].total);
+		double result = 0;
+		float beta = (float)action2v[cur->last_action].total /
+                ((float)cur->visit_count + (float)action2v[cur->last_action].total + 4 * (float)cur->visit_count * (float)action2v[cur->last_action].total * 0.025 * 0.025);
+		float winRate = (float)cur->win_count / (float)(cur->visit_count + 1);
+        float raveWinRate = (float)action2v[cur->last_action].win / (float)(action2v[cur->last_action].total + 1);
+		float exploitation = (1 - beta) * winRate + beta * raveWinRate;
+        float exploration = sqrt(log(parent_visit_count) / (float)(cur->visit_count + 1));
+        result = exploitation + 0.5 * exploration;
+				
+		// const float c = 0.5;
+		// double uct_rave = win_rate + c * exploitation;
+
+		cur->UCB_RAVE_value = result; 
+		// cur->UCB_RAVE_value = uct_rave; 
 	}
 	
 	void expand(node* parent_node) {
@@ -160,8 +187,8 @@ public:
 			double max_UCB_value = 0;
 			int select_idx = 0;
 			for(size_t i = 0; i < cur_node->children.size(); ++i) {
-				if(max_UCB_value < cur_node->children[i]->UCB_value) {
-					max_UCB_value = cur_node->children[i]->UCB_value;
+				if(max_UCB_value < cur_node->children[i]->UCB_RAVE_value) {
+					max_UCB_value = cur_node->children[i]->UCB_RAVE_value;
 					select_idx = i;
 				}
 			}
@@ -215,9 +242,14 @@ public:
 			win = false;
 		while(cur != NULL && cur != root) {
 			++cur->visit_count;
-			if(win == true)
+			++action2v[cur->last_action].total;
+			if(win == true){
 				++cur->win_count;
+				++action2v[cur->last_action].win;				
+			}
+
 			computeUCB(cur, cur->parent->visit_count+1);
+			computeUCB_RAVE(cur, root, cur->parent->visit_count+1);
 			cur = cur->parent;
 		}
 		++root->visit_count;
@@ -328,6 +360,7 @@ private:
 	std::string agent_name;
 	int simulation_count = 0;
 	clock_t timeout = 1000;
+	std::map<action::place, v> action2v;
 	//int step_count = 0;
 	//double time_schedule[36] = {0.2, 0.2, 0.2, 0.4, 0.4, 0.4,
 	//			    0.7, 0.7, 0.7, 1.4, 1.4, 1.4,
