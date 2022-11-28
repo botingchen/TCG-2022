@@ -118,30 +118,7 @@ public:
 		double win_rate = (double) cur->win_count / (double) cur->visit_count;
 		const float c = 0.5;
 		double exploitation = sqrt(log((double)parent_visit_count)/cur->visit_count);
-		cur->UCB_value = win_rate + c * exploitation;;
-	}
-	void computeUCB_RAVE(node* cur, node* root, int parent_visit_count){
-		// if(action2v[cur->last_action].total == 0) return;
-		// double win_rate = (double) action2v[cur->last_action].win / (double) action2v[cur->last_action].total;
-		// double exploitation = -1;
-		// double result = (action2v[cur->last_action].win + cur->win_count + std::sqrt(log((double)parent_visit_count) * cur->visit_count) * 0.25f) / (action2v[cur->last_action].total + cur->visit_count);
-		// beta = self.equivalence/(3 * total + self.equivalence);
-		// if(cur->parent == root) exploitation = sqrt(log((double)parent_visit_count) / (double) action2v[cur->last_action].total);
-		// else exploitation = sqrt(log((double)action2v[cur->parent->last_action].total) / (double) action2v[cur->last_action].total);
-		double result = 0;
-		float beta = (float)action2v[cur->last_action].total /
-                ((float)cur->visit_count + (float)action2v[cur->last_action].total + 4 * (float)cur->visit_count * (float)action2v[cur->last_action].total * 0.025 * 0.025);
-		float winRate = (float)cur->win_count / (float)(cur->visit_count + 1);
-        float raveWinRate = (float)action2v[cur->last_action].win / (float)(action2v[cur->last_action].total + 1);
-		float exploitation = (1 - beta) * winRate + beta * raveWinRate;
-        float exploration = sqrt(log(parent_visit_count) / (float)(cur->visit_count + 1));
-        result = exploitation + 0.5 * exploration;
-				
-		// const float c = 0.5;
-		// double uct_rave = win_rate + c * exploitation;
-
-		cur->UCB_RAVE_value = result; 
-		// cur->UCB_RAVE_value = uct_rave; 
+		cur->UCB_value = win_rate + c * exploitation;
 	}
 	
 	void expand(node* parent_node) {
@@ -187,8 +164,8 @@ public:
 			double max_UCB_value = 0;
 			int select_idx = 0;
 			for(size_t i = 0; i < cur_node->children.size(); ++i) {
-				if(max_UCB_value < cur_node->children[i]->UCB_RAVE_value) {
-					max_UCB_value = cur_node->children[i]->UCB_RAVE_value;
+				if(max_UCB_value < cur_node->children[i]->UCB_value) {
+					max_UCB_value = cur_node->children[i]->UCB_value;
 					select_idx = i;
 				}
 			}
@@ -245,16 +222,26 @@ public:
 			++action2v[cur->last_action].total;
 			if(win == true){
 				++cur->win_count;
-				++action2v[cur->last_action].win;				
+			}
+			if(winner == cur->who){
+				++action2v[cur->last_action].win;
 			}
 
 			computeUCB(cur, cur->parent->visit_count+1);
-			computeUCB_RAVE(cur, root, cur->parent->visit_count+1);
+			if(cur->who == root->who){
+				computeUCB_RAVE(cur,cur->parent->visit_count+1, true);
+			}
+			else{
+				computeUCB_RAVE(cur,cur->parent->visit_count+1, false);
+			}
 			cur = cur->parent;
 		}
 		++root->visit_count;
-		if(win == true)
+		++action2v[root->last_action].total;
+		if(win == true){
 			++root->win_count;
+			++action2v[root->last_action].win;
+		}
 	}
 	
 	void MCTS(node* root, board::piece_type winner, int simulation_count){
@@ -270,6 +257,61 @@ public:
 		}
 	}
 
+	//end of plain MCTS and start of MCTS w/ RAVE
+	node* selection_RAVE(node* cur) {							//select which child node
+		node* cur_node = cur;
+		while(cur_node->children.empty() == false) {
+			double max_UCB_value = 0;
+			int select_idx = 0;
+			for(size_t i = 0; i < cur_node->children.size(); ++i) {
+				if(max_UCB_value < cur_node->children[i]->UCB_RAVE_value) {
+					max_UCB_value = cur_node->children[i]->UCB_RAVE_value;
+					select_idx = i;
+				}
+			}
+			cur_node = cur_node->children[select_idx];
+		}
+		return cur_node;
+	}
+	
+	void computeUCB_RAVE(node* cur, int parent_visit_count, bool isopponent){
+		// if(action2v[cur->last_action].total == 0) return;
+		// double win_rate = (double) action2v[cur->last_action].win / (double) action2v[cur->last_action].total;
+		// double exploitation = -1;
+		// double result = (action2v[cur->last_action].win + cur->win_count + std::sqrt(log((double)parent_visit_count) * cur->visit_count) * 0.25f) / (action2v[cur->last_action].total + cur->visit_count);
+		// beta = self.equivalence/(3 * total + self.equivalence);
+		// if(cur->parent == root) exploitation = sqrt(log((double)parent_visit_count) / (double) action2v[cur->last_action].total);
+		// else exploitation = sqrt(log((double)action2v[cur->parent->last_action].total) / (double) action2v[cur->last_action].total);
+		// float result = 0;
+		// float beta = (float)action2v[cur->last_action].total / ((float)cur->visit_count + (float)action2v[cur->last_action].total + 4 * (float)cur->visit_count * (float)action2v[cur->last_action].total * 0.025 * 0.025);
+		// // float beta = 0.5;
+		float winRate = (float)cur->win_count / (float)(cur->visit_count);
+        float raveWinRate = (float)action2v[cur->last_action].win / (float)(action2v[cur->last_action].total);
+		// // float exploitation = (1 - beta) * winRate + beta * raveWinRate;
+		// float exploitation = (isopponent)? 1 - winRate : (1 - beta) * winRate + beta * raveWinRate;
+        // float exploration = sqrt((float)log(parent_visit_count) / (float)(cur->visit_count));
+		float beta = 1000/(3 * parent_visit_count + 1000);
+		float result = ((1 - beta) * winRate + beta * raveWinRate + sqrt(0.5 * log(parent_visit_count) / (float)(cur->visit_count)));
+        // result = exploitation + 0.5 * exploration;
+				
+		// const float c = 0.5;
+		// double uct_rave = win_rate + c * exploitation;
+
+		cur->UCB_RAVE_value = result; 
+		// cur->UCB_RAVE_value = uct_rave; 
+	}
+	void MCTS_RAVE(node* root, board::piece_type winner, int simulation_count){
+		int cnt = 0;		
+		while (cnt < simulation_count) {
+			node* best_node = selection_RAVE(root);
+
+			expand(best_node);
+			winner = simulation(best_node);
+
+			backpropagation(root, best_node, winner);
+			++cnt;
+		}
+	}
 	action choose_Action(node* Root) {					//choose movement according to its visit count
 		int child_idx = -1;
 		int max_visit_count = 0;
@@ -326,6 +368,43 @@ public:
 			
 			if(simulation_count){
 				MCTS(root,winner,simulation_count);				
+			}
+			else{
+				while(total_time < timeout) {
+				
+					node* best_node = selection(root);
+					expand(best_node);
+					winner = simulation(best_node);
+				
+					backpropagation(root, best_node, winner);
+					end_time = clock();
+					total_time = (double)(end_time-start_time);
+				}
+			}
+
+			
+
+			action best_action = choose_Action(root);
+			delete_tree(root);
+			free(root);
+			
+			return best_action;
+		}
+		else if(agent_name == "MCTS-RAVE"){
+			clock_t start_time, end_time, total_time = 0;
+			start_time = clock();
+			
+			node* root = new node;
+			board::piece_type winner;
+			
+			root->state = state;
+			root->who = (who == board::white ? board::black : board::white);
+			expand(root);
+
+			//std::cout << root->who << " is playing " << std::endl;
+			
+			if(simulation_count){
+				MCTS_RAVE(root,winner,simulation_count);				
 			}
 			else{
 				while(total_time < timeout) {
