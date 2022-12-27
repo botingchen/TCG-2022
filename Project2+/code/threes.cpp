@@ -90,12 +90,10 @@ int main(int argc, const char* argv[]) {
 			if (reward != 0 || state_value != 0) {
 				path.push_back(s1);
 			}
-
 			if (who.check_for_win(game.state())) break;
 		}
 		agent& win = game.last_turns(slide, place);
 		stats.close_episode(win.name());
-
 		slide.update(path);
     	path.clear();
 		slide.close_episode(win.name());

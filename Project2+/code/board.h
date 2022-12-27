@@ -91,6 +91,10 @@ public:
 		for (cell t : *this) v += board::itov(t);
 		return v;
 	}
+	void settile(int i, int j){
+		this->tile[i/4][i%4] = j;
+
+	}
 
 public:
 	bool operator ==(const board& b) const { return tile == b.tile; }

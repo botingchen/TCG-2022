@@ -89,6 +89,12 @@ public:
 			load_weights(meta["load"]);
 		if (meta.find("alpha") != meta.end())
 			alpha = float(meta["alpha"]);
+		if( meta.find("n_step") != meta.end())
+			n_step = int(meta["n_step"]);
+		if (meta.find("seed") != meta.end())
+			engine.seed(int(meta["seed"]));
+		if (meta.find("labmda") != meta.end())
+			engine.seed(int(meta["lambda"]));
 	}
 	virtual ~weight_agent() {
 		if (meta.find("save") != meta.end())
@@ -135,6 +141,9 @@ protected:
 protected:
 	std::vector<weight> net;
 	float alpha;
+	int n_step = 0;
+	float lambda=0.95;
+	std::default_random_engine engine;
 };
 
 /**
@@ -198,7 +207,10 @@ private:
 };
 class learning_slider : public weight_agent {
 public:
-	learning_slider(const std::string& args = "") : weight_agent(args), opcode({ 0, 1, 2, 3 }), space({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }) {}
+	learning_slider(const std::string& args = "") : weight_agent(args), opcode({ 0, 1, 2, 3 }), space({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }) {
+		std::cout << "n_step:" << n_step << std::endl;
+		std::cout << "lambda: " << lambda << std::endl;
+	}
 
 	virtual action take_action(const board& before, float& state_value, int& r) {
 		float best_total = -999999;
@@ -211,8 +223,7 @@ public:
 			if (reward == -1) {
 				continue;
 			}
-
-			float q_value = estimate_value(tmp);	//evaluate the afterstate values by the n-tuple network
+			float q_value = expect_value(tmp, op);	//evaluate the afterstate values by the n-tuple network
 			float v = reward + q_value;				//sum up immediate rewards and afterstate values
 			if (v > best_total) {
 				best_total = v;
@@ -231,6 +242,65 @@ public:
 			return action::slide(best_op);
 		}
 		
+	}
+	//function for calculate expect value for expectimax search
+	float expect_value(const board &b, int op){
+		std::vector<int> empty_tile;
+		int num_empty = 0;
+		std::vector<int> spaces[4];
+		spaces[0] = { 12, 13, 14, 15 };
+		spaces[1] = { 0, 4, 8, 12 };
+		spaces[2] = { 0, 1, 2, 3};
+		spaces[3] = { 3, 7, 11, 15 };
+		//std::vector<int> space = spaces[b.last()];
+		std::vector<int> space = spaces[op];
+		//cout<<"EMPTY: ";
+		for(int i : space){
+			if(b(i) == 0){
+				num_empty++;
+				empty_tile.push_back(i);
+				//cout<<i<<" ";
+			} 
+		}
+		//cout<<endl;
+		int bag[3], num = 0;
+		for (board::cell t = 1; t <= 3; t++)
+			for (size_t i = 0; i < b.bag(t); i++)
+				bag[num++] = t;
+
+		std::shuffle(bag, bag + num, engine);
+		board::cell tile = b.hint();
+		board::cell hint = bag[--num];
+		//cout<<"HINT: "<<cur_tile<<endl;
+		float value = 0.0;
+
+		for(int i : empty_tile){
+			board state1 = b;
+			state1.place(i, tile, hint);
+			//state1.set_tile(i, cur_tile);
+			board::reward best_reward1 = -1;
+			float best_value1 = -std::numeric_limits<float>::max();
+			//int best_op = -1;
+
+			for(int op1 : opcode){
+				board after1 = state1;
+				board::reward reward1 = after1.slide(op1);
+				if(reward1 < 0) continue;
+				
+				float value1 = estimate_value(after1);
+				if(reward1 + value1 > best_reward1 + best_value1) {
+					best_reward1 = reward1;
+					best_value1 = value1;
+				}
+			}
+
+			if(best_reward1 == -1){
+				continue;
+			}		
+			value += (best_value1 + best_reward1) / float(num_empty);
+		}
+
+		return value;
 	}
 
 	//function for estimate afterstate value
@@ -350,16 +420,66 @@ public:
 	// 	return after(a) * 16 * 16 * 16 * 16 * 16 + after(b) * 16 * 16 * 16 * 16 + after(c) * 16 * 16 * 16 + after(d) * 16 * 16 + after(e) * 16 + after(f);
 	// }
 
+	float Gt2tn(std::vector<state>& path, int start, int end){					//calculate
+		board::reward total_reward = 0;
+		float res;
+		if(end == int(path.size()-1)){
+			total_reward = path[start].reward;
+		}
+		else{
+			total_reward = 0;
+		}
+		res = total_reward + estimate_value(path[end].board_after);
+		return res;
+	}
+	// void update(std::vector<state>& path) {
+	// 	float tmp = 0;	//zero for the final afterstate
+	// 	float alpha_final = alpha / 32;
+	// 	adjust_value(path[path.size()-1].board_after, alpha / 32 * ( tmp - estimate_value(path[path.size()-1].board_after)));
+	// 	e_trace[path.size()-1] += 1;
+	// 	for (int i = path.size() - 2; i >= 0; i--) {
+	// 		float gtlambda = lambda;
+			
+	// 		for(int k = 1; k <= path.size() - 1; k++){
+	// 			tmp = Gt2tn(path, i, k);
+	// 		}
+
+		
+	// 		float td_error = tmp -  estimate_value(path[i].board_after);
+	// 		adjust_value(path[i].board_after, alpha_final * td_error);
+	// 	}
+	// }
+	float power(int lambda, int times){
+		int res = 1;
+		for(int i = 0; i < times; i++){
+			res = res * lambda;
+		}
+		return res;
+	}
 
 	void update(std::vector<state>& path) {
 		float tmp = 0;	//zero for the final afterstate
-		for (int i = path.size() - 1; i >= 0; i--) {
-			float td_error = tmp - path[i].value;
-			float alpha_final = alpha / 32;
+		float alpha_final = alpha / 32;
+		adjust_value(path[path.size()-1].board_after, alpha / 32 * ( tmp - estimate_value(path[path.size()-1].board_after)));
+		// tmp = path[path.size()-1].reward + estimate_value(path[path.size()-1].board_after);
+		for (int i = path.size() - 2; i >= 0; i--) {
+			board::reward total_reward = 0;
+			for(int j = 1; j <= n_step; j++){
+				if(i + j >= int(path.size())) break;
+				total_reward += path[i+j].reward;
+			}
+			
+			if(i + n_step >= int(path.size())){
+				tmp = total_reward;
+			}
+			else{
+				tmp = total_reward + estimate_value(path[i+n_step].board_after);
+			}
+			float td_error = tmp -  estimate_value(path[i].board_after);
 			adjust_value(path[i].board_after, alpha_final * td_error);
-			tmp = path[i].reward + estimate_value(path[i].board_after);
 		}
 	}
+
 private:
 	std::array<int, 4> opcode;
 	std::vector<int> space;
