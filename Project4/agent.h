@@ -93,7 +93,7 @@ class MCTS_player : public random_agent {
 public:
 	MCTS_player(const std::string& args = "") : random_agent("name=random role=unknown " + args),
 		space(board::size_x * board::size_y),
-	        white_space(board::size_x * board::size_y),
+	    white_space(board::size_x * board::size_y),
 		black_space(board::size_x * board::size_y),
 		who(board::empty) {
 		if (name().find_first_of("[]():; ") != std::string::npos)
@@ -185,32 +185,59 @@ public:
 		bool terminal = false;
 		board state = root->state;
 		board::piece_type who = root->who;
-		
+        std::vector<board::point> emptyPoint;
+        int amountOfActions = board::size_x * board::size_y;
+        for (int i = 0; i < amountOfActions; i++) {
+            board::point move(i);
+            if (state[move.x][move.y] == board::empty)
+                emptyPoint.push_back(move);
+        }
+        int n = emptyPoint.size();
 		while(terminal == false) {
 			terminal = true;
 			
 			who = (who == board::white ? board::black : board::white);
-				
+			
 			if (who == board::black) {
-				std::shuffle(black_space.begin(), black_space.end(), engine);
-				for(const action::place& move : black_space) {
-					board after = state;
-					if (move.apply(after) == board::legal) {
-						move.apply(state);
+				// std::shuffle(black_space.begin(), black_space.end(), engine);
+				int i = 0;
+				board after = state;
+				while(i < n){
+					std::uniform_int_distribution<int> uniform(i, n - 1);
+					int randomIndex = uniform(engine);
+					if(after.place(emptyPoint[randomIndex]) == board::legal){
+						state.place(emptyPoint[randomIndex]);
+						std::swap(emptyPoint[randomIndex], emptyPoint[n-1]);
+						n--;
 						terminal = false;
-						break;
+						break;		
 					}
+					else{
+						std::swap(emptyPoint[randomIndex], emptyPoint[i]);
+                		i++;
+
+					}					
 				}
 			}
 			else if (who == board::white) {
-				std::shuffle(white_space.begin(), white_space.end(), engine);
-				for(const action::place& move : white_space) {
-					board after = state;
-					if (move.apply(after) == board::legal) {
-						move.apply(state);
+				// std::shuffle(white_space.begin(), white_space.end(), engine);
+				int i = 0;
+				board after = state;
+				while(i < n){
+					std::uniform_int_distribution<int> uniform(i, n - 1);
+					int randomIndex = uniform(engine);
+					if(after.place(emptyPoint[randomIndex]) == board::legal){
+						state.place(emptyPoint[randomIndex]);
+						std::swap(emptyPoint[randomIndex], emptyPoint[n-1]);
+						n--;
 						terminal = false;
-						break;
+						break;		
 					}
+					else{
+						std::swap(emptyPoint[randomIndex], emptyPoint[i]);
+                		i++;
+
+					}					
 				}
 			}
 		}
@@ -239,26 +266,6 @@ public:
 			// ++action2v[root->last_action].win;
 		}
 	}
-	board::point getRandomAction(board position, std::vector<board::point>& empty, int n) {
-        if (empty.empty()) {
-            std::cerr << "getRandomAction error" << std::endl;
-            exit(0);
-        }
-        int i = 0;
-        while (i < n) {
-            std::uniform_int_distribution<int> uniform(i, n - 1);
-            int randomIndex = uniform(engine);
-//            int randomIndex = (rand() % (n - i)) + i;
-            if (position.place(empty[randomIndex]) == board::legal) {
-                std::swap(empty[randomIndex], empty[n-1]);
-                return empty[n-1];
-            } else {
-                std::swap(empty[randomIndex], empty[i]);
-                i++;
-            }
-        }
-        return empty[0];
-    }
 	
 	void MCTS(node* root, board::piece_type winner, int simulation_count){
 		int cnt = 0;		

@@ -1,2 +1,5 @@
 gogui-1.4.9/*
 run-gogui-twogtp.sh
+run-gogui-server.sh
+nogo-judge
+nogo
