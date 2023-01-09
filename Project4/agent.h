@@ -73,29 +73,18 @@ protected:
  * put a legal piece randomly
  */
 
-class node {
-public:
-        board state;
-        int win_count = 0;
-        int visit_count = 0;
-        double UCB_value = 0x7fffffff;
+class node{
+	public:
+		board state;
+		int win_count = 0;
+		int visit_count = 0;
+		double UCB_value = 0x7fffffff;
 		double UCB_RAVE_value = 0x7fffffff;
-        node* parent = NULL;
-        action::place last_action;
-        std::vector<node*> children;
-        board::piece_type who;
-		std::vector<board::point> legal;
-		// node(board b, std::default_random_engine& engine){
-        //     for (int i = 0; i < board::size_x * board::size_y; i++) {
-        //         board::point move(i);
-        //         board tem = b;
-        //         if (tem.place(move) == board::legal)
-        //             legal.push_back(move);
-        //     }
-        //     std::shuffle(legal.begin(), legal.end(), engine);
-        // }
-
-	~node(){};
+		node* parent = NULL;
+		action::place last_action;
+		std::vector<node*> children;
+		board::piece_type who;
+		~node(){};
 };
 struct v{
 	int total = 0;
@@ -103,6 +92,7 @@ struct v{
 };
 class MCTS_player : public random_agent {
 public:
+	std::vector<action::place> space, white_space, black_space;
 	MCTS_player(const std::string& args = "") : random_agent("name=random role=unknown " + args),
 		space(board::size_x * board::size_y),
 	    white_space(board::size_x * board::size_y),
@@ -129,7 +119,6 @@ public:
 		for (size_t i = 0; i < black_space.size(); ++i)
 			black_space[i] = action::place(i, board::black);
 	}
-
 	double computeUCB(node* cur, int parent_visit_count) {						//count for UCT 
 		if(cur->visit_count == 0) return 0x7fffffff;
 		double win_rate = (double) cur->win_count / (double) cur->visit_count;
@@ -139,7 +128,7 @@ public:
 		return win_rate + c * exploitation;
 	}
 	
-	void expand(node* parent_node) {
+	void expand(node* parent_node, int& total_node) {
 		board::piece_type child_who;
 		action::place child_move;
 	 	
@@ -157,6 +146,7 @@ public:
 					parent_node->children.emplace_back(child_node);
 				}
 			}
+			total_node+=parent_node->children.size();
 		}
 		else if (parent_node->who == board::white) {
 			child_who = board::black;
@@ -172,6 +162,7 @@ public:
 					parent_node->children.emplace_back(child_node);
 				}
 			}
+			total_node+=parent_node->children.size();
 		}
 			
 	}				
@@ -284,12 +275,14 @@ public:
 		}
 	}
 	
-	void MCTS(node* root, board::piece_type winner, int simulation_count){
+	void MCTS(node* root, board::piece_type winner, int simulation_count, int total_node){
 		int cnt = 0;		
+		// int total_node = 0;
 		while (cnt < simulation_count) {
 			node* best_node = selection(root);
-
-			expand(best_node);
+			if(total_node < simulation_count + 2){
+				expand(best_node, total_node);				
+			}
 			node* newNode;
 			if(best_node->children.size() == 0){
 				newNode = best_node;
@@ -353,10 +346,11 @@ public:
 	}
 	void MCTS_RAVE(node* root, board::piece_type winner, int simulation_count){
 		int cnt = 0;
+		// int total_node;
 		while (cnt < simulation_count) {
 			node* best_node = selection_RAVE(root, cnt);
 
-			expand(best_node);
+			// expand(best_node);
 			node* newNode;
 			if(best_node->children.size() == 0){
 				newNode = best_node;
@@ -395,6 +389,7 @@ public:
 					free(node->children[i]);
 			}
 			node->children.clear();
+			// delete node;
 		}
 		return;
 	}
@@ -428,8 +423,9 @@ public:
 					
 					roots[i]->state = state;
 					roots[i]->who = (who == board::white ? board::black : board::white);
-					expand(roots[i]);
-					MCTS(roots[i],winner,simulation_count);	
+					int total_node = 0;
+					expand(roots[i], total_node);
+					MCTS(roots[i],winner,simulation_count, total_node);	
 				}							
 			}
 			size_t bound = roots[0]->children.size();
@@ -454,82 +450,6 @@ public:
 			
 			return best_action;
 		}
-		else if (agent_name == "MCTS"){
-
-			clock_t start_time, end_time, total_time = 0;
-			start_time = clock();
-			
-			node* root = new node;
-			board::piece_type winner;
-			
-			root->state = state;
-			root->who = (who == board::white ? board::black : board::white);
-			expand(root);
-
-			std::cout << root->who << " is playing MCTS" << std::endl;
-			
-			if(simulation_count){
-				
-				MCTS(root,winner,simulation_count);				
-			}
-			else{
-				while(total_time < timeout) {
-				
-					node* best_node = selection(root);
-					expand(best_node);
-					winner = simulation(best_node);
-				
-					backpropagation(root, best_node, winner);
-					end_time = clock();
-					total_time = (double)(end_time-start_time);
-				}
-			}
-
-			
-
-			action best_action = choose_Action(root);
-			delete_tree(root);
-			free(root);
-			
-			return best_action;
-		}
-		else if(agent_name == "MCTS-RAVE"){
-			clock_t start_time, end_time, total_time = 0;
-			start_time = clock();
-			
-			node* root = new node;
-			board::piece_type winner;
-			
-			root->state = state;
-			root->who = (who == board::white ? board::black : board::white);
-			expand(root);
-
-			std::cout << root->who << " is playing MCTS-RAVE" << std::endl;
-			
-			if(simulation_count){
-				MCTS_RAVE(root,winner,simulation_count);				
-			}
-			else{
-				while(total_time < timeout) {
-				
-					node* best_node = selection(root);
-					expand(best_node);
-					winner = simulation(best_node);
-				
-					backpropagation(root, best_node, winner);
-					end_time = clock();
-					total_time = (double)(end_time-start_time);
-				}
-			}
-
-			
-
-			action best_action = choose_Action(root);
-			delete_tree(root);
-			free(root);
-			
-			return best_action;
-		}
 
 		else {
 			throw std::invalid_argument("assigned agent is not finished yet!!!");
@@ -538,13 +458,13 @@ public:
 	}
 
 private:
-	std::vector<action::place> space, white_space, black_space;
 	board::piece_type who;
 	std::string agent_name;
 	int simulation_count = 0;
 	int thread_num = 1;
 	clock_t timeout = 1000;
 	std::map<action::place, v> action2v;
+	// friend class node;
 	//int step_count = 0;
 	//double time_schedule[36] = {0.2, 0.2, 0.2, 0.4, 0.4, 0.4,
 	//			    0.7, 0.7, 0.7, 1.4, 1.4, 1.4,
