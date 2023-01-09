@@ -17,6 +17,8 @@
 #include <fstream>
 #include "board.h"
 #include "action.h"
+#include <omp.h>
+#include <thread>
 
 class agent {
 public:
@@ -82,6 +84,16 @@ public:
         action::place last_action;
         std::vector<node*> children;
         board::piece_type who;
+		std::vector<board::point> legal;
+		// node(board b, std::default_random_engine& engine){
+        //     for (int i = 0; i < board::size_x * board::size_y; i++) {
+        //         board::point move(i);
+        //         board tem = b;
+        //         if (tem.place(move) == board::legal)
+        //             legal.push_back(move);
+        //     }
+        //     std::shuffle(legal.begin(), legal.end(), engine);
+        // }
 
 	~node(){};
 };
@@ -98,9 +110,14 @@ public:
 		who(board::empty) {
 		if (name().find_first_of("[]():; ") != std::string::npos)
 			throw std::invalid_argument("invalid name: " + name());
-		if (meta.find("search") != meta.end()) agent_name = (std::string)meta["search"];
+		if (meta.find("search") != meta.end()){
+			agent_name = (std::string)meta["search"];
+			// std::cout << agent_name << std::endl;
+		}
 		if (meta.find("timeout") != meta.end()) timeout = (clock_t)meta["timeout"];
 		if (meta.find("simulation") != meta.end()) simulation_count = (int)meta["simulation"];
+		if (meta.find("thread") != meta.end()) thread_num = (int)meta["thread"];
+
 		if (role() == "black") who = board::black;
 		if (role() == "white") who = board::white;
 		if (who == board::empty)
@@ -289,7 +306,7 @@ public:
 	}
 
 	//end of plain MCTS and start of MCTS w/ RAVE
-	node* selection_RAVE(node* cur) {							//select which child node
+	node* selection_RAVE(node* cur, int cnt) {							//select which child node
 		node* cur_node = cur;
 		while(cur_node->children.empty() == false) {
 			double max_UCB_value = 0;
@@ -299,8 +316,7 @@ public:
 					return cur_node->children[i];
 				}
 				double tmp_ucb_rave = 0;
-				if(cur->who == cur_node->who)	tmp_ucb_rave = computeUCB_RAVE(cur_node->children[i], cur_node->visit_count, false);
-				else tmp_ucb_rave = computeUCB_RAVE(cur_node->children[i], cur_node->visit_count, true);
+				tmp_ucb_rave = computeUCB_RAVE(cur, cur_node->children[i], cur_node->visit_count, cnt);;
 				if(max_UCB_value < tmp_ucb_rave) {
 					max_UCB_value = tmp_ucb_rave;
 					select_idx = i;
@@ -311,46 +327,47 @@ public:
 		return cur_node;
 	}
 	
-	double computeUCB_RAVE(node* cur, int parent_visit_count, bool isOpponent){
-		// if(action2v[cur->last_action].total == 0) return;
-		// double win_rate = (double) action2v[cur->last_action].win / (double) action2v[cur->last_action].total;
-		// double exploitation = -1;
-		// double result = (action2v[cur->last_action].win + cur->win_count + std::sqrt(log((double)parent_visit_count) * cur->visit_count) * 0.25f) / (action2v[cur->last_action].total + cur->visit_count);
-		// beta = self.equivalence/(3 * total + self.equivalence);
-		// if(cur->parent == root) exploitation = sqrt(log((double)parent_visit_count) / (double) action2v[cur->last_action].total);
-		// else exploitation = sqrt(log((double)action2v[cur->parent->last_action].total) / (double) action2v[cur->last_action].total);
-		// float result = 0;
-		// float beta = (float)action2v[cur->last_action].total / ((float)cur->visit_count + (float)action2v[cur->last_action].total + 4 * (float)cur->visit_count * (float)action2v[cur->last_action].total * 0.025 * 0.025);
-		// // float beta = 0.5;
+	double computeUCB_RAVE(node* root, node* cur, int parent_visit_count, int cnt){
+
+		if(action2v[cur->last_action].total == 0) return 0x7fffffff;
+		if(cur->visit_count == 0) return 0x7fffffff;
         float raveWinRate = (float)action2v[cur->last_action].win / (float)(action2v[cur->last_action].total);
-		// // float exploitation = (1 - beta) * winRate + beta * raveWinRate;
-		// float exploitation = (isopponent)? 1 - winRate : (1 - beta) * winRate + beta * raveWinRate;
-        // float exploration = sqrt((float)log(parent_visit_count) / (float)(cur->visit_count));
-		// float beta = 1000/(3 * parent_visit_count + 1000);
-		// float beta = (float)action2v[cur->last_action].total /
-                // ((float)cur->visit_count + (float)action2v[cur->last_action].total + 4 * (float)cur->visit_count * (float)action2v[cur->last_action].total * 0.025 * 0.025);
-		// float exploitation = (isOpponent)? (1 - beta) * (1 - winRate) + beta * (1 - raveWinRate) : (1 - beta) * winRate + beta * raveWinRate;
-		// float result = ((1 - beta) * winRate + beta * raveWinRate + sqrt(0.5 * log(parent_visit_count) / (float)(cur->visit_count)));
-        // float result = exploitation + 0.5 * exploration;
-		float ucb = computeUCB(cur, parent_visit_count);
-		float result = ucb + raveWinRate/2;
-				
-		// const float c = 0.5;
-		// double uct_rave = win_rate + c * exploitation;
+		
+		float c = 0.5;
+        // float b = 0.5;
+
+		float b = sqrt((float)simulation_count / (float)(3 * cnt + simulation_count));
+
+		// std::cout << raveWinRate << " "<< std::endl;
+        float winRate = (float)cur->win_count / (float)(cur->visit_count);
+        // float raveWinRate = (float) / (float)(node.raveCount + 1);
+        // TODO: Need to think about anti uct
+		// bool isOpponent = (cur->who == root->who)? true : false;
+        float exploitation = b * winRate + (1-b) * raveWinRate;
+        float exploration = sqrt(log((float)cur->parent->visit_count) / (float)(cur->visit_count));
+        float result =  exploitation + c * exploration;
 
 		cur->UCB_RAVE_value = result; 
 		return result;
 		// cur->UCB_RAVE_value = uct_rave; 
 	}
 	void MCTS_RAVE(node* root, board::piece_type winner, int simulation_count){
-		int cnt = 0;		
+		int cnt = 0;
 		while (cnt < simulation_count) {
-			node* best_node = selection_RAVE(root);
+			node* best_node = selection_RAVE(root, cnt);
 
 			expand(best_node);
-			winner = simulation(best_node);
+			node* newNode;
+			if(best_node->children.size() == 0){
+				newNode = best_node;
+			}
+			else{
+				std::shuffle(best_node->children.begin(), best_node->children.end(), engine);
+				newNode = best_node->children[0];
+			}
+			winner = simulation(newNode);
 
-			backpropagation(root, best_node, winner);
+			backpropagation(root, newNode, winner);
 			++cnt;
 		}
 	}
@@ -394,8 +411,51 @@ public:
 			return action();
 		}
 		
+		else if (agent_name == "MCTS-parallel"){
+			omp_set_num_threads(thread_num);
+			//std::cout << state << std::endl;
+			std::vector<node*> roots(thread_num);
+		
 
+			// std::cout << root->who << " is playing MCTS parallel" << std::endl;
+
+
+			if(simulation_count){
+				#pragma omp parallel for
+				for(int i = 0; i < thread_num; ++i) {
+					roots[i] = new node;
+					board::piece_type winner;
+					
+					roots[i]->state = state;
+					roots[i]->who = (who == board::white ? board::black : board::white);
+					expand(roots[i]);
+					MCTS(roots[i],winner,simulation_count);	
+				}							
+			}
+			size_t bound = roots[0]->children.size();
+
+			// aggregate count result
+			for (int thread_idx = 1; thread_idx < thread_num; ++thread_idx) {
+
+				if (roots[thread_idx]->children.size() != bound) throw std::invalid_argument("children size error");
+				for(int i = 0; i < (int)bound ;++i) {
+					roots[0]->children[i]->visit_count += roots[thread_idx]->children[i]->visit_count;
+				}
+			}
+
+			
+
+			action best_action = choose_Action(roots[0]);
+			#pragma omp parallel for
+			for(int i = 0; i < thread_num; ++i) {
+				delete_tree(roots[i]);
+				free(roots[i]);
+			}
+			
+			return best_action;
+		}
 		else if (agent_name == "MCTS"){
+
 			clock_t start_time, end_time, total_time = 0;
 			start_time = clock();
 			
@@ -406,9 +466,10 @@ public:
 			root->who = (who == board::white ? board::black : board::white);
 			expand(root);
 
-			//std::cout << root->who << " is playing " << std::endl;
+			std::cout << root->who << " is playing MCTS" << std::endl;
 			
 			if(simulation_count){
+				
 				MCTS(root,winner,simulation_count);				
 			}
 			else{
@@ -443,7 +504,7 @@ public:
 			root->who = (who == board::white ? board::black : board::white);
 			expand(root);
 
-			//std::cout << root->who << " is playing " << std::endl;
+			std::cout << root->who << " is playing MCTS-RAVE" << std::endl;
 			
 			if(simulation_count){
 				MCTS_RAVE(root,winner,simulation_count);				
@@ -469,6 +530,7 @@ public:
 			
 			return best_action;
 		}
+
 		else {
 			throw std::invalid_argument("assigned agent is not finished yet!!!");
 		}
@@ -480,6 +542,7 @@ private:
 	board::piece_type who;
 	std::string agent_name;
 	int simulation_count = 0;
+	int thread_num = 1;
 	clock_t timeout = 1000;
 	std::map<action::place, v> action2v;
 	//int step_count = 0;
